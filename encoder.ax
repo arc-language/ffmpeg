@@ -1,0 +1,172 @@
+namespace ffmpeg
+
+// ---------------------------------------------------------------------
+// Encoder - wraps AVCodecContext for encoding
+// ---------------------------------------------------------------------
+struct Encoder {
+    codec_ctx: *AVCodecContext
+    codec: *AVCodec
+    frame: *AVFrame
+    packet: *AVPacket
+    frame_count: int64
+}
+
+func create_h264_encoder(width: int32, height: int32, fps: int32, bitrate: int64) (Encoder, int32) {
+    let enc = Encoder{
+        codec_ctx: null,
+        codec: null,
+        frame: null,
+        packet: null,
+        frame_count: 0
+    }
+    
+    // Find H.264 codec
+    enc.codec = avcodec_find_encoder(AV_CODEC_ID_H264)
+    if enc.codec == null {
+        return (enc, -1)
+    }
+    
+    // Allocate codec context
+    enc.codec_ctx = avcodec_alloc_context3(enc.codec)
+    if enc.codec_ctx == null {
+        return (enc, -1)
+    }
+    
+    // Set encoding parameters
+    enc.codec_ctx.bit_rate = bitrate
+    enc.codec_ctx.width = width
+    enc.codec_ctx.height = height
+    enc.codec_ctx.time_base = AVRational{num: 1, den: fps}
+    enc.codec_ctx.framerate = AVRational{num: fps, den: 1}
+    enc.codec_ctx.gop_size = 10
+    enc.codec_ctx.max_b_frames = 1
+    enc.codec_ctx.pix_fmt = AV_PIX_FMT_YUV420P
+    
+    // Open codec
+    let opts: *AVDictionary = null
+    av_dict_set(&opts, "preset", "medium", 0)
+    av_dict_set(&opts, "crf", "23", 0)
+    
+    let rc = avcodec_open2(enc.codec_ctx, enc.codec, &opts)
+    av_dict_free(&opts)
+    
+    if rc < 0 {
+        avcodec_free_context(&enc.codec_ctx)
+        return (enc, rc)
+    }
+    
+    // Allocate frame and packet
+    enc.frame = av_frame_alloc()
+    enc.packet = av_packet_alloc()
+    
+    if enc.frame == null || enc.packet == null {
+        enc.cleanup()
+        return (enc, -1)
+    }
+    
+    // Configure frame
+    enc.frame.format = enc.codec_ctx.pix_fmt
+    enc.frame.width = width
+    enc.frame.height = height
+    
+    rc = av_frame_get_buffer(enc.frame, 0)
+    if rc < 0 {
+        enc.cleanup()
+        return (enc, rc)
+    }
+    
+    return (enc, 0)
+}
+
+func encode_frame(self e: *Encoder, on_packet: func(*AVPacket) void) int32 {
+    // Make frame writable
+    let rc = av_frame_make_writable(e.frame)
+    if rc < 0 {
+        return rc
+    }
+    
+    e.frame.pts = e.frame_count
+    e.frame_count = e.frame_count + 1
+    
+    // Send frame to encoder
+    rc = avcodec_send_frame(e.codec_ctx, e.frame)
+    if rc < 0 {
+        return rc
+    }
+    
+    // Receive encoded packets
+    for true {
+        rc = avcodec_receive_packet(e.codec_ctx, e.packet)
+        if rc == AVERROR_EAGAIN || rc == AVERROR_EOF {
+            break
+        }
+        if rc < 0 {
+            return rc
+        }
+        
+        on_packet(e.packet)
+        av_packet_unref(e.packet)
+    }
+    
+    return 0
+}
+
+func flush(self e: *Encoder, on_packet: func(*AVPacket) void) int32 {
+    // Send null frame to flush encoder
+    let rc = avcodec_send_frame(e.codec_ctx, null)
+    if rc < 0 {
+        return rc
+    }
+    
+    // Receive remaining packets
+    for true {
+        rc = avcodec_receive_packet(e.codec_ctx, e.packet)
+        if rc == AVERROR_EOF {
+            break
+        }
+        if rc < 0 {
+            return rc
+        }
+        
+        on_packet(e.packet)
+        av_packet_unref(e.packet)
+    }
+    
+    return 0
+}
+
+func cleanup(self e: *Encoder) void {
+    if e.frame != null {
+        av_frame_free(&e.frame)
+    }
+    if e.packet != null {
+        av_packet_free(&e.packet)
+    }
+    if e.codec_ctx != null {
+        avcodec_free_context(&e.codec_ctx)
+    }
+}
+
+// Helper to fill frame with test pattern
+func fill_yuv_frame(self e: *Encoder, frame_index: int32) void {
+    let y = e.frame.data[0]
+    let u = e.frame.data[1]
+    let v = e.frame.data[2]
+    
+    // Fill Y plane (luminance) with gradient
+    for let i: int32 = 0; i < e.codec_ctx.height; i = i + 1 {
+        for let j: int32 = 0; j < e.codec_ctx.width; j = j + 1 {
+            let offset = i * e.frame.linesize[0] + j
+            y[offset] = cast<byte>((i + j + frame_index) % 256)
+        }
+    }
+    
+    // Fill U and V planes (chrominance)
+    for let i: int32 = 0; i < e.codec_ctx.height / 2; i = i + 1 {
+        for let j: int32 = 0; j < e.codec_ctx.width / 2; j = j + 1 {
+            let offset = i * e.frame.linesize[1] + j
+            u[offset] = cast<byte>(128 + i + frame_index)
+            v[offset] = cast<byte>(64 + j + frame_index)
+        }
+    }
+}

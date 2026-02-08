@@ -1,0 +1,72 @@
+namespace ffmpeg
+
+// ---------------------------------------------------------------------
+// Muxer - wraps AVFormatContext for container output
+// ---------------------------------------------------------------------
+struct Muxer {
+    fmt_ctx: *AVFormatContext
+    video_stream: *AVStream
+}
+
+func create_muxer(filename: *byte, codec_ctx: *AVCodecContext) (Muxer, int32) {
+    let mux = Muxer{
+        fmt_ctx: null,
+        video_stream: null
+    }
+    
+    // Allocate output format context
+    let rc = avformat_alloc_output_context2(&mux.fmt_ctx, null, null, filename)
+    if rc < 0 {
+        return (mux, rc)
+    }
+    
+    // Create video stream
+    mux.video_stream = avformat_new_stream(mux.fmt_ctx, null)
+    if mux.video_stream == null {
+        avformat_free_context(mux.fmt_ctx)
+        return (mux, -1)
+    }
+    
+    mux.video_stream.id = 0
+    mux.video_stream.time_base = codec_ctx.time_base
+    
+    // Copy codec parameters to stream
+    rc = avcodec_parameters_from_context(mux.video_stream.codecpar, codec_ctx)
+    if rc < 0 {
+        avformat_free_context(mux.fmt_ctx)
+        return (mux, rc)
+    }
+    
+    // Open output file
+    rc = avio_open(&mux.fmt_ctx.pb, filename, AVIO_FLAG_WRITE)
+    if rc < 0 {
+        avformat_free_context(mux.fmt_ctx)
+        return (mux, rc)
+    }
+    
+    // Write file header
+    rc = avformat_write_header(mux.fmt_ctx, null)
+    if rc < 0 {
+        avio_closep(&mux.fmt_ctx.pb)
+        avformat_free_context(mux.fmt_ctx)
+        return (mux, rc)
+    }
+    
+    return (mux, 0)
+}
+
+func write_packet(self m: *Muxer, pkt: *AVPacket) int32 {
+    pkt.stream_index = m.video_stream.index
+    av_packet_rescale_ts(pkt, m.video_stream.codec.time_base, m.video_stream.time_base)
+    return av_interleaved_write_frame(m.fmt_ctx, pkt)
+}
+
+func finalize(self m: *Muxer) int32 {
+    let rc = av_write_trailer(m.fmt_ctx)
+    if m.fmt_ctx.pb != null {
+        avio_closep(&m.fmt_ctx.pb)
+    }
+    avformat_free_context(m.fmt_ctx)
+    m.fmt_ctx = null
+    return rc
+}
