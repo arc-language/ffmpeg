@@ -9,6 +9,8 @@ struct Encoder {
     frame: *AVFrame
     packet: *AVPacket
     frame_count: int64
+    width: int32
+    height: int32
 }
 
 func create_h264_encoder(width: int32, height: int32, fps: int32, bitrate: int64) (Encoder, int32) {
@@ -17,7 +19,9 @@ func create_h264_encoder(width: int32, height: int32, fps: int32, bitrate: int64
         codec: null,
         frame: null,
         packet: null,
-        frame_count: 0
+        frame_count: 0,
+        width: width,
+        height: height
     }
     
     // Find H.264 codec
@@ -32,15 +36,15 @@ func create_h264_encoder(width: int32, height: int32, fps: int32, bitrate: int64
         return (enc, -1)
     }
     
-    // Set encoding parameters
-    enc.codec_ctx.bit_rate = bitrate
-    enc.codec_ctx.width = width
-    enc.codec_ctx.height = height
-    enc.codec_ctx.time_base = AVRational{num: 1, den: fps}
-    enc.codec_ctx.framerate = AVRational{num: fps, den: 1}
-    enc.codec_ctx.gop_size = 10
-    enc.codec_ctx.max_b_frames = 1
-    enc.codec_ctx.pix_fmt = AV_PIX_FMT_YUV420P
+    // Set encoding parameters using accessors
+    av_codec_set_bit_rate(enc.codec_ctx, bitrate)
+    av_codec_set_width(enc.codec_ctx, width)
+    av_codec_set_height(enc.codec_ctx, height)
+    av_codec_set_time_base(enc.codec_ctx, AVRational{num: 1, den: fps})
+    av_codec_set_framerate(enc.codec_ctx, AVRational{num: fps, den: 1})
+    av_codec_set_gop_size(enc.codec_ctx, 10)
+    av_codec_set_max_b_frames(enc.codec_ctx, 1)
+    av_codec_set_pix_fmt(enc.codec_ctx, AV_PIX_FMT_YUV420P)
     
     // Open codec
     let opts: *AVDictionary = null
@@ -64,10 +68,10 @@ func create_h264_encoder(width: int32, height: int32, fps: int32, bitrate: int64
         return (enc, -1)
     }
     
-    // Configure frame
-    enc.frame.format = enc.codec_ctx.pix_fmt
-    enc.frame.width = width
-    enc.frame.height = height
+    // Configure frame using accessors
+    av_frame_set_format(enc.frame, AV_PIX_FMT_YUV420P)
+    av_frame_set_width(enc.frame, width)
+    av_frame_set_height(enc.frame, height)
     
     rc = av_frame_get_buffer(enc.frame, 0)
     if rc < 0 {
@@ -85,7 +89,7 @@ func encode_frame(self e: *Encoder, on_packet: func(*AVPacket) void) int32 {
         return rc
     }
     
-    e.frame.pts = e.frame_count
+    av_frame_set_pts(e.frame, e.frame_count)
     e.frame_count = e.frame_count + 1
     
     // Send frame to encoder
@@ -149,24 +153,36 @@ func cleanup(self e: *Encoder) void {
 
 // Helper to fill frame with test pattern
 func fill_yuv_frame(self e: *Encoder, frame_index: int32) void {
-    let y = e.frame.data[0]
-    let u = e.frame.data[1]
-    let v = e.frame.data[2]
+    let y = av_frame_get_data(e.frame, 0)
+    let u = av_frame_get_data(e.frame, 1)
+    let v = av_frame_get_data(e.frame, 2)
+    
+    let y_linesize = av_frame_get_linesize(e.frame, 0)
+    let u_linesize = av_frame_get_linesize(e.frame, 1)
+    let v_linesize = av_frame_get_linesize(e.frame, 2)
     
     // Fill Y plane (luminance) with gradient
-    for let i: int32 = 0; i < e.codec_ctx.height; i = i + 1 {
-        for let j: int32 = 0; j < e.codec_ctx.width; j = j + 1 {
-            let offset = i * e.frame.linesize[0] + j
+    let i: int32 = 0
+    for i < e.height {
+        let j: int32 = 0
+        for j < e.width {
+            let offset = i * y_linesize + j
             y[offset] = cast<byte>((i + j + frame_index) % 256)
+            j = j + 1
         }
+        i = i + 1
     }
     
     // Fill U and V planes (chrominance)
-    for let i: int32 = 0; i < e.codec_ctx.height / 2; i = i + 1 {
-        for let j: int32 = 0; j < e.codec_ctx.width / 2; j = j + 1 {
-            let offset = i * e.frame.linesize[1] + j
+    i = 0
+    for i < e.height / 2 {
+        let j: int32 = 0
+        for j < e.width / 2 {
+            let offset = i * u_linesize + j
             u[offset] = cast<byte>(128 + i + frame_index)
             v[offset] = cast<byte>(64 + j + frame_index)
+            j = j + 1
         }
+        i = i + 1
     }
 }

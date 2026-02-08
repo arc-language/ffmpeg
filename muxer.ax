@@ -27,27 +27,33 @@ func create_muxer(filename: *byte, codec_ctx: *AVCodecContext) (Muxer, int32) {
         return (mux, -1)
     }
     
-    mux.video_stream.id = 0
-    mux.video_stream.time_base = codec_ctx.time_base
+    av_stream_set_id(mux.video_stream, 0)
+    
+    let time_base = av_codec_get_time_base(codec_ctx)
+    av_stream_set_time_base(mux.video_stream, time_base)
     
     // Copy codec parameters to stream
-    rc = avcodec_parameters_from_context(mux.video_stream.codecpar, codec_ctx)
+    let codecpar = av_stream_get_codecpar(mux.video_stream)
+    rc = avcodec_parameters_from_context(codecpar, codec_ctx)
     if rc < 0 {
         avformat_free_context(mux.fmt_ctx)
         return (mux, rc)
     }
     
     // Open output file
-    rc = avio_open(&mux.fmt_ctx.pb, filename, AVIO_FLAG_WRITE)
+    let pb: *AVIOContext = null
+    rc = avio_open(&pb, filename, AVIO_FLAG_WRITE)
     if rc < 0 {
         avformat_free_context(mux.fmt_ctx)
         return (mux, rc)
     }
+    av_format_set_pb(mux.fmt_ctx, pb)
     
     // Write file header
     rc = avformat_write_header(mux.fmt_ctx, null)
     if rc < 0 {
-        avio_closep(&mux.fmt_ctx.pb)
+        let pb2 = av_format_get_pb(mux.fmt_ctx)
+        avio_closep(&pb2)
         avformat_free_context(mux.fmt_ctx)
         return (mux, rc)
     }
@@ -56,15 +62,21 @@ func create_muxer(filename: *byte, codec_ctx: *AVCodecContext) (Muxer, int32) {
 }
 
 func write_packet(self m: *Muxer, pkt: *AVPacket) int32 {
-    pkt.stream_index = m.video_stream.index
-    av_packet_rescale_ts(pkt, m.video_stream.codec.time_base, m.video_stream.time_base)
+    let stream_idx = av_stream_get_index(m.video_stream)
+    av_packet_set_stream_index(pkt, stream_idx)
+    
+    let codec_tb = av_codec_get_time_base(null)
+    let stream_tb = av_stream_get_time_base(m.video_stream)
+    av_packet_rescale_ts(pkt, codec_tb, stream_tb)
+    
     return av_interleaved_write_frame(m.fmt_ctx, pkt)
 }
 
 func finalize(self m: *Muxer) int32 {
     let rc = av_write_trailer(m.fmt_ctx)
-    if m.fmt_ctx.pb != null {
-        avio_closep(&m.fmt_ctx.pb)
+    let pb = av_format_get_pb(m.fmt_ctx)
+    if pb != null {
+        avio_closep(&pb)
     }
     avformat_free_context(m.fmt_ctx)
     m.fmt_ctx = null
