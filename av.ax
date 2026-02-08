@@ -44,7 +44,7 @@ const AVFMT_GLOBALHEADER: int32 = 0x0040
 const AVIO_FLAG_WRITE: int32 = 2
 
 // ---------------------------------------------------------------------
-// Opaque FFmpeg structures (no fields accessible)
+// Opaque FFmpeg structures
 // ---------------------------------------------------------------------
 struct AVFormatContext {}
 struct AVCodecContext {}
@@ -114,50 +114,4 @@ extern c {
     // Dictionary functions
     func av_dict_set(**AVDictionary, *byte, *byte, int32) int32
     func av_dict_free(**AVDictionary) void
-    
-    // Accessors for opaque struct fields
-    func av_codec_get_pix_fmt(*AVCodecContext) int32
-    func av_codec_set_pix_fmt(*AVCodecContext, int32) void
-    func av_codec_get_width(*AVCodecContext) int32
-    func av_codec_set_width(*AVCodecContext, int32) void
-    func av_codec_get_height(*AVCodecContext) int32
-    func av_codec_set_height(*AVCodecContext, int32) void
-    func av_codec_get_time_base(*AVCodecContext) AVRational
-    func av_codec_set_time_base(*AVCodecContext, AVRational) void
-    func av_codec_get_framerate(*AVCodecContext) AVRational
-    func av_codec_set_framerate(*AVCodecContext, AVRational) void
-    func av_codec_get_bit_rate(*AVCodecContext) int64
-    func av_codec_set_bit_rate(*AVCodecContext, int64) void
-    func av_codec_get_gop_size(*AVCodecContext) int32
-    func av_codec_set_gop_size(*AVCodecContext, int32) void
-    func av_codec_get_max_b_frames(*AVCodecContext) int32
-    func av_codec_set_max_b_frames(*AVCodecContext, int32) void
-    
-    // Frame field accessors
-    func av_frame_get_data(*AVFrame, int32) *byte
-    func av_frame_get_linesize(*AVFrame, int32) int32
-    func av_frame_get_format(*AVFrame) int32
-    func av_frame_set_format(*AVFrame, int32) void
-    func av_frame_get_width(*AVFrame) int32
-    func av_frame_set_width(*AVFrame, int32) void
-    func av_frame_get_height(*AVFrame) int32
-    func av_frame_set_height(*AVFrame, int32) void
-    func av_frame_get_pts(*AVFrame) int64
-    func av_frame_set_pts(*AVFrame, int64) void
-    
-    // Stream field accessors
-    func av_stream_get_id(*AVStream) int32
-    func av_stream_set_id(*AVStream, int32) void
-    func av_stream_get_index(*AVStream) int32
-    func av_stream_get_time_base(*AVStream) AVRational
-    func av_stream_set_time_base(*AVStream, AVRational) void
-    func av_stream_get_codecpar(*AVStream) *AVCodecParameters
-    
-    // Packet field accessors
-    func av_packet_get_stream_index(*AVPacket) int32
-    func av_packet_set_stream_index(*AVPacket, int32) void
-    
-    // Format context accessors
-    func av_format_get_pb(*AVFormatContext) *AVIOContext
-    func av_format_set_pb(*AVFormatContext, *AVIOContext) void
 }

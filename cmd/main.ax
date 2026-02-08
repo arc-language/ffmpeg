@@ -11,7 +11,7 @@ extern c {
 let g_muxer: *ffmpeg.Muxer = null
 
 func packet_callback(pkt: *ffmpeg.AVPacket) void {
-    g_muxer.write_packet(pkt)
+    //g_muxer.write_packet(pkt)
 }
 
 func main() int32 {
@@ -48,7 +48,7 @@ func main() int32 {
     }
     
     // Set global muxer for callback
-    g_muxer = &muxer
+    //g_muxer = &muxer
     
     printf("Muxer created successfully\n\n")
     printf("Encoding %d frames...\n", num_frames)
@@ -89,8 +89,12 @@ func main() int32 {
         return 1
     }
     
+    // Calculate duration without float division
+    let duration_int = num_frames / fps
+    let duration_frac = ((num_frames % fps) * 100) / fps
+    
     printf("\nEncoding complete! Output saved to: %s\n", output_file)
-    printf("Duration: %.2f seconds\n", cast<float64>(num_frames) / cast<float64>(fps))
+    printf("Duration: %d.%02d seconds\n", duration_int, duration_frac)
     
     // Cleanup
     muxer.finalize()
