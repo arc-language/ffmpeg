@@ -1,0 +1,38 @@
+namespace ffmpeg
+
+import c "libavcodec"
+import c "libavformat"
+import c "libavutil"
+
+// Opaque structs
+struct AVCodec {}
+
+// Simple utility functions
+extern c {
+    func av_version_info() *byte
+    func avcodec_version() uint32
+    func avformat_version() uint32
+    func avutil_version() uint32
+    func avcodec_configuration() *byte
+    func avcodec_license() *byte
+}
+
+// Helper to print version
+func print_version_info() void {
+    // Version numbers are encoded as: (major << 16) | (minor << 8) | micro
+}
+
+// Get major version
+func get_major_version(version: uint32) uint32 {
+    return version >> 16
+}
+
+// Get minor version
+func get_minor_version(version: uint32) uint32 {
+    return (version >> 8) & 0xFF
+}
+
+// Get micro version
+func get_micro_version(version: uint32) uint32 {
+    return version & 0xFF
+}

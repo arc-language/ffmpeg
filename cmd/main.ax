@@ -7,98 +7,46 @@ extern c {
     func printf(*byte, ...) int32
 }
 
-// Global muxer for packet callback
-let g_muxer: *ffmpeg.Muxer = null
-
-func packet_callback(pkt: *ffmpeg.AVPacket) void {
-    //g_muxer.write_packet(pkt)
-}
-
 func main() int32 {
-    printf("FFmpeg H.264 Encoder Example\n")
-    printf("============================\n\n")
+    printf("FFmpeg Library Test\n")
+    printf("===================\n\n")
     
-    // Encoding parameters
-    let width: int32 = 640
-    let height: int32 = 480
-    let fps: int32 = 25
-    let bitrate: int64 = 400000
-    let num_frames: int32 = 100
-    let output_file = "output.mp4"
+    // Get version numbers
+    let codec_ver = ffmpeg.avcodec_version()
+    let format_ver = ffmpeg.avformat_version()
+    let util_ver = ffmpeg.avutil_version()
     
-    printf("Creating encoder: %dx%d @ %d fps, bitrate=%d\n",
-        width, height, fps, cast<int32>(bitrate))
+    // Print libavcodec version
+    let codec_major = ffmpeg.get_major_version(codec_ver)
+    let codec_minor = ffmpeg.get_minor_version(codec_ver)
+    let codec_micro = ffmpeg.get_micro_version(codec_ver)
+    printf("libavcodec version: %d.%d.%d\n", 
+        cast<int32>(codec_major), 
+        cast<int32>(codec_minor), 
+        cast<int32>(codec_micro))
     
-    // Create H.264 encoder
-    let (encoder, enc_rc) = ffmpeg.create_h264_encoder(width, height, fps, bitrate)
-    if enc_rc < 0 {
-        printf("Failed to create encoder: %d\n", enc_rc)
-        return 1
-    }
+    // Print libavformat version
+    let format_major = ffmpeg.get_major_version(format_ver)
+    let format_minor = ffmpeg.get_minor_version(format_ver)
+    let format_micro = ffmpeg.get_micro_version(format_ver)
+    printf("libavformat version: %d.%d.%d\n", 
+        cast<int32>(format_major), 
+        cast<int32>(format_minor), 
+        cast<int32>(format_micro))
     
-    printf("Encoder created successfully\n")
+    // Print libavutil version
+    let util_major = ffmpeg.get_major_version(util_ver)
+    let util_minor = ffmpeg.get_minor_version(util_ver)
+    let util_micro = ffmpeg.get_micro_version(util_ver)
+    printf("libavutil version: %d.%d.%d\n", 
+        cast<int32>(util_major), 
+        cast<int32>(util_minor), 
+        cast<int32>(util_micro))
     
-    // Create muxer for MP4 output
-    printf("Creating muxer for: %s\n", output_file)
-    let (muxer, mux_rc) = ffmpeg.create_muxer(output_file, encoder.codec_ctx)
-    if mux_rc < 0 {
-        printf("Failed to create muxer: %d\n", mux_rc)
-        encoder.cleanup()
-        return 1
-    }
+    printf("\nConfiguration: %s\n", ffmpeg.avcodec_configuration())
+    printf("License: %s\n", ffmpeg.avcodec_license())
     
-    // Set global muxer for callback
-    //g_muxer = &muxer
-    
-    printf("Muxer created successfully\n\n")
-    printf("Encoding %d frames...\n", num_frames)
-    
-    // Encode frames
-    let i: int32 = 0
-    for i < num_frames {
-        // Generate test pattern
-        encoder.fill_yuv_frame(i)
-        
-        // Encode and write packets
-        let frame_rc = encoder.encode_frame(packet_callback)
-        
-        if frame_rc < 0 {
-            printf("Error encoding frame %d: %d\n", i, frame_rc)
-            muxer.finalize()
-            encoder.cleanup()
-            return 1
-        }
-        
-        if i % 10 == 0 {
-            printf("  Encoded frame %d/%d\n", i, num_frames)
-        }
-        
-        i = i + 1
-    }
-    
-    printf("Encoded %d frames\n", num_frames)
-    
-    // Flush encoder
-    printf("Flushing encoder...\n")
-    let flush_rc = encoder.flush(packet_callback)
-    
-    if flush_rc < 0 {
-        printf("Error flushing encoder: %d\n", flush_rc)
-        muxer.finalize()
-        encoder.cleanup()
-        return 1
-    }
-    
-    // Calculate duration without float division
-    let duration_int = num_frames / fps
-    let duration_frac = ((num_frames % fps) * 100) / fps
-    
-    printf("\nEncoding complete! Output saved to: %s\n", output_file)
-    printf("Duration: %d.%02d seconds\n", duration_int, duration_frac)
-    
-    // Cleanup
-    muxer.finalize()
-    encoder.cleanup()
+    printf("\nFFmpeg libraries loaded successfully!\n")
     
     return 0
 }
